@@ -1,14 +1,10 @@
-import { config as loadEnv } from "env";
-
-const env = loadEnv({ path: "../.env" });
-
+// config.ts
 export const ENV = {
-    BOT_TOKEN: env.BOT_TOKEN || "",
-    MONGO_URI: env.MONGO_URI || "",
-    MONGO_DB: env.MONGO_DB || "",
-    ADMIN_CHAT_ID: parseInt(env.ADMIN_CHAT_ID || "0", 10),
-    POLL_EXPIRATION: 300 * 1000, // 5 minutes, you can move this to .env if you want it configurable
-    // Add any other configuration values you need
+    BOT_TOKEN: Deno.env.get("BOT_TOKEN") || "",
+    MONGO_URI: Deno.env.get("MONGODB_URI") || "",
+    MONGO_DB: Deno.env.get("MONGODB_DB") || "",
+    ADMIN_CHAT_ID: parseInt(Deno.env.get("ADMIN_CHAT_ID") || "0", 10),
+    POLL_EXPIRATION: 300 * 1000, // 5 minutes
 };
 
 // Type guard function to check if a value is defined
@@ -23,6 +19,7 @@ const requiredConfigs: (keyof typeof ENV)[] = [
     "MONGO_DB",
     "ADMIN_CHAT_ID",
 ];
+
 requiredConfigs.forEach((key) => {
     if (!isDefined(ENV[key])) {
         throw new Error(`Missing required configuration: ${key}`);

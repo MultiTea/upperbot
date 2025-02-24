@@ -1,13 +1,12 @@
-import { Context, MiddlewareFn, session, SessionFlavor } from "grammY";
-import { ISession, MongoDBAdapter } from "MongoDB";
-import { Database, MongoClient } from "MDBClient";
+// src/middleware/dbAcess.ts
+import { MongoClient } from "https://deno.land/x/mongo@v0.32.0/mod.ts";
+import { Context, MiddlewareFn } from "grammY";
+import { Database } from "MDBClient";
 import { AllSessionData } from "../types/sessions.ts";
 
-export interface BaseSessionData {
-    chatId: number;
-}
-
-export type BaseContext = Context & SessionFlavor<AllSessionData> & {
+// Define the extended context with session data
+export type BaseContext = Context & {
+    session: AllSessionData;
     db: Database;
 };
 
@@ -23,28 +22,14 @@ export async function connectToMongo(
     db = client.database(dbName);
 }
 
-export function createSessionMiddleware(): MiddlewareFn<BaseContext> {
-    const sessions = db.collection<ISession>("sessions");
-    return session({
-        initial: () => ({ chatId: 0, polls: [] } as AllSessionData),
-        storage: new MongoDBAdapter({ collection: sessions }),
-        getSessionKey: (ctx) => {
-            // Use chat ID as the session key if available
-            if (ctx.chat?.id) {
-                return ctx.chat.id.toString();
-            }
-            // Use user ID as fallback if available
-            if (ctx.from?.id) {
-                return ctx.from.id.toString();
-            }
-            // If neither chat nor user ID is available, return undefined
-            return "default";
-        },
-    });
-}
-
 export const dbMiddleware: MiddlewareFn<BaseContext> = async (ctx, next) => {
     ctx.db = db;
+
+    // Ensure session is initialized
+    if (!ctx.session) {
+        ctx.session = { chatId: 0, polls: [] } as AllSessionData;
+    }
+
     await next();
 };
 

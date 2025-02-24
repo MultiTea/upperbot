@@ -1,4 +1,4 @@
-// commands.ts
+// src/composers/commands.ts
 import { Composer, GrammyError } from "grammY";
 import { BotContext, PollData, PollResults } from "../types/sessions.ts";
 import { ENV } from "../middleware/config.ts";
@@ -12,9 +12,7 @@ commandManager.command("lol", (ctx) => {
 });
 
 // TEST COMMAND
-
 const POLL_EXPIRATION = 30 * 1000;
-
 commandManager.command("test", async (ctx) => {
     const user = ctx.from;
     const userId = user?.id as number;
@@ -37,7 +35,6 @@ commandManager.command("test", async (ctx) => {
     // Constition du sondage
     const question =
         `🆕 Nouvelle demande → ${user?.first_name} souhaite se joindre à nous ! Souhaitez-vous l'intégrer à l'événement ?`;
-
     const pollOptions = [
         "✅ Oui, pas de soucis !",
         "🚫 Non, je ne souhaite pas",
@@ -79,7 +76,6 @@ commandManager.command("test", async (ctx) => {
                 console.log(
                     `Poll ID ${newPollData.pollId} in chat ${ctx.session.chatId} stopped.`,
                 );
-
                 // Add the closed poll to the closedPolls collection
                 await addToClosedPolls(ctx, newPollData);
             }
@@ -112,7 +108,6 @@ async function addToClosedPolls(ctx: BotContext, pollData: PollData) {
             ctx.session.chatId,
             pollData.messageId,
         );
-
         // Create the PollResults object
         const results: PollResults = {
             totalVoters: pollResults.total_voter_count,
@@ -121,13 +116,11 @@ async function addToClosedPolls(ctx: BotContext, pollData: PollData) {
                 voterCount: option.voter_count || 0,
             })),
         };
-
         // Add results to pollData
         const closedPollData = {
             ...pollData,
             results: results,
         };
-
         // Insert into closedPolls collection
         const closedPolls = ctx.db.collection("closedPolls");
         await closedPolls.insertOne(closedPollData);
@@ -154,22 +147,17 @@ commandManager.command("check", async (ctx) => {
 async function isPollClosed(ctx: BotContext): Promise<string[]> {
     const openPolls = ctx.db.collection("openPolls");
     const closedPolls = ctx.db.collection("closedPolls");
-
     // Get all closed poll IDs
     const closedPollIds = await closedPolls.distinct("pollId");
-
     // Find all polls in openPolls that are also in closedPolls
     const pollsToRemove = await openPolls.find({
         pollId: { $in: closedPollIds },
     }).toArray();
-
     // Extract the poll IDs to remove
     const pollIdsToRemove = pollsToRemove.map((poll) => poll.pollId);
-
     if (pollIdsToRemove.length > 0) {
         // Remove all these polls in one operation
         await openPolls.deleteMany({ pollId: { $in: pollIdsToRemove } });
-
         console.log(
             `Removed ${pollIdsToRemove.length} closed polls from openPolls collection.`,
         );
@@ -179,6 +167,5 @@ async function isPollClosed(ctx: BotContext): Promise<string[]> {
     } else {
         console.log("No closed polls found in openPolls collection.");
     }
-
     return pollIdsToRemove;
 }

@@ -1,14 +1,12 @@
 // adminMiddleware.ts
 import { MiddlewareFn } from "grammY";
 import { BotContext } from "../types/sessions.ts";
-import { config } from "env";
 
-// Load environment variables
-const env = config({ path: "../.env" });
-
-const ADMIN_IDS = env.ADMIN_CHAT_ID.split(",").map((id) =>
-    parseInt(id.trim(), 10)
-);
+// Load environment variables directly using Deno.env
+const ADMIN_IDS =
+    Deno.env.get("ADMIN_CHAT_ID")?.split(",").map((id) =>
+        parseInt(id.trim(), 10)
+    ) || [];
 
 export const adminMiddleware: MiddlewareFn<BotContext> = async (
     ctx,
