@@ -1,11 +1,84 @@
 // pollManager.ts
-import { Composer, GrammyError } from "grammY";
+import { Composer } from "grammY";
 import { BotContext, PollData, PollResults } from "../types/sessions.ts";
 
 // Constants
-const POLL_EXPIRATION = 300 * 1000; // 5 minutes
+const POLL_EXPIRATION = 24 * 60 * 60 * 1000; // 24 hours
 
+// Initialize TTL index when the bot starts
 export const pollManager = new Composer<BotContext>();
+
+// Create TTL index when the bot starts
+pollManager.command("init", async (ctx) => {
+    try {
+        const openPolls = ctx.db.collection("openPolls");
+        // Create TTL index on the expirationTime field
+        await openPolls.createIndexes({
+            indexes: [{ 
+                key: { expirationTime: 1 }, 
+                name: "expirationTimeIndex",
+                expireAfterSeconds: 0 
+            }]
+        });
+        await ctx.reply("TTL index created on openPolls collection");
+    } catch (error) {
+        console.error("Error creating TTL index:", error);
+        await ctx.reply(`Error creating TTL index: ${error instanceof Error ? error.message : String(error)}`);
+    }
+});
+
+// Test command to create a poll that expires in 2 minutes for user 724347971
+pollManager.command("testpoll", async (ctx) => {
+    const user = {
+        id: 724347971,
+        username: "test_user",
+        first_name: "Test User"
+    };
+    const userId = user.id;
+    const userHandle = user.username;
+    const chatId = ctx.chat?.id;
+
+    if (!chatId) {
+        console.error("Chat ID is undefined");
+        return;
+    }
+
+    // Ensure the session exists and the chatId is set
+    if (ctx.session) {
+        ctx.session.chatId = chatId;
+    } else {
+        console.error("Session is undefined");
+        return;
+    }
+
+    // Test poll question
+    const question =
+        `Test poll that will expire in 2 minutes!`;
+
+    const pollOptions: string[] = [
+        "✅ Yes",
+        "❌ No",
+        "❓ Maybe",
+    ];
+
+    // Send poll
+    const pollMessage = await ctx.api.sendPoll(chatId, question, pollOptions, {
+        is_anonymous: true,
+    });
+
+    const currentTime = new Date();
+    const testPollData: PollData = {
+        userId: userId,
+        handle: userHandle,
+        pollId: pollMessage.poll.id,
+        messageId: pollMessage.message_id,
+        timestamp: currentTime.getTime(),
+        expirationTime: currentTime.getTime() + 2 * 60 * 1000, // 2 minutes
+    };
+
+    await addToOpenPolls(ctx, testPollData);
+    await ctx.reply("Test poll created for user 724347971! It will expire in 2 minutes.");
+});
 
 pollManager.on("chat_join_request", async (ctx) => {
     const user = ctx.from;
@@ -47,14 +120,14 @@ pollManager.on("chat_join_request", async (ctx) => {
         is_anonymous: true,
     });
 
-    const currentTime = Date.now();
+    const currentTime = new Date();
     const newPollData: PollData = {
         userId: userId,
         handle: userHandle,
         pollId: pollMessage.poll.id,
         messageId: pollMessage.message_id,
-        timestamp: currentTime,
-        expirationTime: currentTime + POLL_EXPIRATION,
+        timestamp: currentTime.getTime(),
+        expirationTime: currentTime.getTime() + POLL_EXPIRATION,
     };
 
     await addToOpenPolls(ctx, newPollData);
@@ -63,45 +136,19 @@ pollManager.on("chat_join_request", async (ctx) => {
         parse_mode: "Markdown",
         link_preview_options: { is_disabled: false },
     });
-
-    // In the setTimeout
-    setTimeout(async () => {
-        try {
-            if (ctx.session?.chatId) {
-                console.log(
-                    `Poll ID ${newPollData.pollId} in chat ${ctx.session.chatId} stopped.`,
-                );
-
-                // Add the closed poll to the closedPolls collection
-                await addToClosedPolls(ctx, newPollData);
-            }
-        } catch (error) {
-            if (error instanceof GrammyError) {
-                console.log(
-                    `Error stopping poll ID ${newPollData.pollId}:`,
-                    error.description,
-                );
-            } else {
-                console.error(
-                    `Unexpected error stopping poll ID ${newPollData.pollId}:`,
-                    error,
-                );
-            }
-        }
-    }, POLL_EXPIRATION);
 });
 
 async function addToOpenPolls(ctx: BotContext, pollData: PollData) {
     const openPolls = ctx.db.collection("openPolls");
     await openPolls.insertOne(pollData);
-    console.log(`Poll ID ${pollData.pollId} added to openPolls collection.`);
+    console.log(`Poll ID ${pollData.pollId} added to openPolls collection with TTL index.`);
 }
 
-async function addToClosedPolls(ctx: BotContext, pollData: PollData) {
+async function _addToClosedPolls(ctx: BotContext, pollData: PollData) {
     try {
         // Fetch the poll results
         const pollResults = await ctx.api.stopPoll(
-            ctx.session.chatId,
+            ctx.session?.chatId || 0,
             pollData.messageId,
         );
 
